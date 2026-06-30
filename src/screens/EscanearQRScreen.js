@@ -11,6 +11,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Camera } from "expo-camera";
 import { CameraView } from "expo-camera";
+import {
+  ChevronLeft,
+  Camera as CameraIcon,
+  Keyboard,
+  Lightbulb,
+  ScanLine,
+} from "lucide-react-native";
 import { useUser } from "../context/UserContext";
 import { useViaje } from "../context/ViajeContext";
 import { COLORS, SPACING, RADIUS, FONTS, SHADOWS } from "../constants";
@@ -47,10 +54,10 @@ const EscanearQRScreen = ({ navigation }) => {
         return;
       }
 
-      const response = await unirseViajeQR(viajeId, user.dni);
+      const response = await unirseViajeQR(viajeId, user.id);
 
       Alert.alert(
-        "¡Te has unido! 🎉",
+        "Te has unido",
         `Te has unido al viaje de ${response.viajePasajero?.viaje?.conductor?.nombre || "un conductor"}`,
         [
           {
@@ -86,11 +93,11 @@ const EscanearQRScreen = ({ navigation }) => {
     try {
       const response = await unirseViajeQR(
         codigoManual.trim().toUpperCase(),
-        user.dni,
+        user.id,
       );
 
       Alert.alert(
-        "¡Te has unido! 🎉",
+        "Te has unido",
         `Te has unido al viaje de ${response.viajePasajero?.viaje?.conductor?.nombre || "un conductor"}`,
         [
           {
@@ -128,8 +135,10 @@ const EscanearQRScreen = ({ navigation }) => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.noPermissionContainer}>
-          <Text style={styles.noPermissionIcon}>📷</Text>
-          <Text style={styles.noPermissionTitle}>Sin acceso a la cámara</Text>
+          <View style={styles.noPermissionIconBg}>
+            <CameraIcon size={40} color={COLORS.gray400} strokeWidth={1.5} />
+          </View>
+          <Text style={styles.noPermissionTitle}>Sin acceso a la camara</Text>
           <Text style={styles.noPermissionText}>
             Necesitamos acceso a tu cámara para escanear códigos QR.
           </Text>
@@ -149,11 +158,18 @@ const EscanearQRScreen = ({ navigation }) => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButton}>←</Text>
+          <ChevronLeft size={24} color={COLORS.gray800} strokeWidth={2.5} />
         </TouchableOpacity>
         <Text style={styles.title}>Escanear QR</Text>
-        <TouchableOpacity onPress={() => setModoManual(!modoManual)}>
-          <Text style={styles.toggleButton}>{modoManual ? "📷" : "⌨️"}</Text>
+        <TouchableOpacity
+          style={styles.toggleIconButton}
+          onPress={() => setModoManual(!modoManual)}
+        >
+          {modoManual ? (
+            <CameraIcon size={22} color={COLORS.primary} strokeWidth={2.5} />
+          ) : (
+            <Keyboard size={22} color={COLORS.primary} strokeWidth={2.5} />
+          )}
         </TouchableOpacity>
       </View>
 
@@ -161,7 +177,7 @@ const EscanearQRScreen = ({ navigation }) => {
         // Modo manual
         <View style={styles.manualContainer}>
           <View style={styles.manualIcon}>
-            <Text style={styles.manualIconText}>⌨️</Text>
+            <Keyboard size={36} color={COLORS.primary} strokeWidth={1.5} />
           </View>
           <Text style={styles.manualTitle}>Ingresa el código</Text>
           <Text style={styles.manualSubtitle}>
@@ -224,10 +240,13 @@ const EscanearQRScreen = ({ navigation }) => {
 
       {/* Info */}
       <View style={styles.infoContainer}>
-        <Text style={styles.infoText}>
-          💡 También puedes pedirle al conductor el código textual para
-          escribirlo manualmente.
-        </Text>
+        <View style={styles.infoRow}>
+          <Lightbulb size={16} color={COLORS.warning} strokeWidth={2} />
+          <Text style={styles.infoText}>
+            Tambien puedes pedirle al conductor el codigo textual para
+            escribirlo manualmente.
+          </Text>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -247,9 +266,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     ...SHADOWS.small,
   },
-  backButton: {
-    fontSize: FONTS.xxl,
-    color: COLORS.gray700,
+  toggleIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.primarySoft,
+    alignItems: "center",
+    justifyContent: "center",
   },
   title: {
     fontSize: FONTS.lg,
@@ -258,6 +281,10 @@ const styles = StyleSheet.create({
   },
   toggleButton: {
     fontSize: FONTS.xxl,
+  },
+  backButton: {
+    fontSize: FONTS.xxl,
+    color: COLORS.gray700,
   },
   message: {
     fontSize: FONTS.md,
@@ -271,8 +298,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: SPACING.xl,
   },
-  noPermissionIcon: {
-    fontSize: 64,
+  noPermissionIconBg: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.gray100,
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: SPACING.lg,
   },
   noPermissionTitle: {
@@ -296,13 +328,18 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: COLORS.primarySoft,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: SPACING.lg,
   },
   manualIconText: {
     fontSize: 40,
+  },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: SPACING.xs,
   },
   manualTitle: {
     fontSize: FONTS.xl,

@@ -7,9 +7,14 @@ import {
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
+  Dimensions,
+  Keyboard,
 } from "react-native";
-import { COLORS, SPACING, RADIUS, FONTS, SHADOWS } from "../constants";
-import { autocompletePlaces, getPlaceDetails } from "../services/googlePlaces";
+import { COLORS, SPACING, RADIUS, FONTS, SHADOWS } from "../../constants";
+import {
+  autocompletePlaces,
+  getPlaceDetails,
+} from "../../services/googlePlaces";
 
 const PlaceAutocompleteInput = ({
   label,
@@ -26,7 +31,25 @@ const PlaceAutocompleteInput = ({
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [errorText, setErrorText] = useState("");
+  const [dropUp, setDropUp] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const requestIdRef = useRef(0);
+  const inputRef = useRef(null);
+
+  const SCREEN_HEIGHT = Dimensions.get("window").height;
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const trimmed = useMemo(() => (value || "").trim(), [value]);
 
@@ -65,6 +88,14 @@ const PlaceAutocompleteInput = ({
     return () => clearTimeout(handle);
   }, [trimmed, open, biasLocation, radius, components]);
 
+  const measureAndOpen = () => {
+    inputRef.current?.measureInWindow((x, y, width, height) => {
+      const spaceBelow = SCREEN_HEIGHT - keyboardHeight - (y + height);
+      setDropUp(spaceBelow < 250);
+    });
+    setOpen(true);
+  };
+
   const handlePick = async (prediction) => {
     try {
       setLoading(true);
@@ -94,16 +125,17 @@ const PlaceAutocompleteInput = ({
 
       <View style={styles.inputRow}>
         <TextInput
+          ref={inputRef}
           value={value}
           onChangeText={(t) => {
             onChangeText?.(t);
-            setOpen(true);
+            measureAndOpen();
           }}
           placeholder={placeholder}
           placeholderTextColor={COLORS.gray400}
           style={[styles.input, disabled && styles.inputDisabled]}
           editable={!disabled}
-          onFocus={() => setOpen(true)}
+          onFocus={measureAndOpen}
           onBlur={() => {
             setTimeout(() => setOpen(false), 150);
           }}
@@ -116,7 +148,12 @@ const PlaceAutocompleteInput = ({
       </View>
 
       {open && predictions.length > 0 && (
-        <View style={styles.dropdown}>
+        <View
+          style={[
+            styles.dropdown,
+            dropUp ? styles.dropdownUp : styles.dropdownDown,
+          ]}
+        >
           <FlatList
             keyboardShouldPersistTaps="handled"
             data={predictions}
@@ -184,14 +221,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   dropdown: {
+    position: "absolute",
+    left: 0,
+    right: 0,
     backgroundColor: COLORS.white,
     borderWidth: 1,
     borderColor: COLORS.gray200,
     borderRadius: RADIUS.md,
-    marginTop: SPACING.xs,
     maxHeight: 220,
     overflow: "hidden",
+    zIndex: 1000,
+    elevation: 1000,
     ...SHADOWS.medium,
+  },
+  dropdownDown: {
+    top: "100%",
+    marginTop: SPACING.xs,
+  },
+  dropdownUp: {
+    bottom: "100%",
+    marginBottom: SPACING.xs,
   },
   item: {
     paddingHorizontal: SPACING.md,

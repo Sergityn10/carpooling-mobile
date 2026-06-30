@@ -2,6 +2,14 @@
 import React, { useMemo, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  ChevronLeft,
+  Play,
+  Clock,
+  QrCode,
+  Users,
+  CircleDot,
+} from "lucide-react-native";
 import { useUser } from "../context/UserContext";
 import { useViaje } from "../context/ViajeContext";
 import {
@@ -12,8 +20,7 @@ import {
   SHADOWS,
   VIAJE_ESTADO,
 } from "../constants";
-import TripMapPreview from "../components/TripMapPreview";
-import { QRCodeModal } from "../components";
+import { QRCodeModal, TripMapPreview } from "../components";
 
 const ViajeEnCursoScreen = ({ route, navigation }) => {
   const { user } = useUser();
@@ -23,28 +30,40 @@ const ViajeEnCursoScreen = ({ route, navigation }) => {
   const [showQR, setShowQR] = useState(false);
 
   const origen = useMemo(() => {
-    if (viaje?.puntoInicialLat == null || viaje?.puntoInicialLng == null)
-      return null;
+    const lat = viaje?.origen_lat ?? viaje?.puntoInicialLat;
+    const lng = viaje?.origen_lng ?? viaje?.puntoInicialLng;
+    if (lat == null || lng == null) return null;
     return {
-      latitude: viaje.puntoInicialLat,
-      longitude: viaje.puntoInicialLng,
-      name: viaje?.puntoInicialNombre,
-      address: viaje?.puntoInicialDireccion,
+      latitude: Number(lat),
+      longitude: Number(lng),
+      name: viaje?.origen || viaje?.puntoInicialNombre || "Origen",
+      address:
+        viaje?.origen ||
+        viaje?.puntoInicialDireccion ||
+        viaje?.puntoInicialNombre ||
+        "",
     };
   }, [viaje]);
 
   const destino = useMemo(() => {
-    if (viaje?.puntoFinalLat == null || viaje?.puntoFinalLng == null)
-      return null;
+    const lat = viaje?.destino_lat ?? viaje?.puntoFinalLat;
+    const lng = viaje?.destino_lng ?? viaje?.puntoFinalLng;
+    if (lat == null || lng == null) return null;
     return {
-      latitude: viaje.puntoFinalLat,
-      longitude: viaje.puntoFinalLng,
-      name: viaje?.puntoFinalNombre,
-      address: viaje?.puntoFinalDireccion,
+      latitude: Number(lat),
+      longitude: Number(lng),
+      name: viaje?.destino || viaje?.puntoFinalNombre || "Destino",
+      address:
+        viaje?.destino ||
+        viaje?.puntoFinalDireccion ||
+        viaje?.puntoFinalNombre ||
+        "",
     };
   }, [viaje]);
 
-  const canStart = viaje?.estado === VIAJE_ESTADO.PENDIENTE;
+  const estadoViaje = (viaje?.status || viaje?.estado || "").toLowerCase();
+  const canStart =
+    estadoViaje === "pendiente" || estadoViaje === "pendiente_pago";
 
   if (!viaje) {
     return (
@@ -68,19 +87,19 @@ const ViajeEnCursoScreen = ({ route, navigation }) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButton}>←</Text>
+          <ChevronLeft size={24} color={COLORS.gray800} strokeWidth={2.5} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Recorrido</Text>
           <Text style={styles.headerSubtitle}>
-            {viaje?.estado === VIAJE_ESTADO.ACTIVO
-              ? "🟢 En curso"
-              : viaje?.estado === VIAJE_ESTADO.PENDIENTE
-                ? "⏳ Pendiente"
-                : viaje?.estado}
+            {estadoViaje === "activo" || estadoViaje === "en curso"
+              ? "En curso"
+              : estadoViaje === "pendiente"
+                ? "Pendiente"
+                : viaje?.status || viaje?.estado}
           </Text>
         </View>
-        <View style={{ width: 40 }} />
+        <View style={{ width: 24 }} />
       </View>
 
       <View style={styles.mapContainer}>
@@ -92,14 +111,16 @@ const ViajeEnCursoScreen = ({ route, navigation }) => {
           style={styles.bottomButton}
           onPress={() => setShowQR(true)}
         >
-          <Text style={styles.bottomButtonText}>📱 QR</Text>
+          <QrCode size={20} color={COLORS.gray700} strokeWidth={2} />
+          <Text style={styles.bottomButtonText}>QR</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.bottomButton, styles.bottomButtonMiddle]}
           onPress={() => navigation.navigate("ViajeDetalle", { viaje })}
         >
-          <Text style={styles.bottomButtonText}>👥 Pasajeros</Text>
+          <Users size={20} color={COLORS.gray700} strokeWidth={2} />
+          <Text style={styles.bottomButtonText}>Pasajeros</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -113,13 +134,13 @@ const ViajeEnCursoScreen = ({ route, navigation }) => {
             try {
               if (!user) {
                 Alert.alert(
-                  "Inicia sesión",
-                  "Debes iniciar sesión para iniciar el viaje.",
+                  "Inicia sesion",
+                  "Debes iniciar sesion para iniciar el viaje.",
                 );
                 return;
               }
-              await iniciarViaje();
-              Alert.alert("¡Viaje iniciado!", "El tracking GPS está activo.");
+              await iniciarViaje(viaje);
+              Alert.alert("Viaje iniciado", "El tracking GPS esta activo.");
             } catch (e) {
               Alert.alert(
                 "Error",
@@ -129,7 +150,7 @@ const ViajeEnCursoScreen = ({ route, navigation }) => {
           }}
         >
           <Text style={styles.startButtonText}>
-            {canStart ? "🚀 Empezar" : "🟢 En curso"}
+            {canStart ? "Empezar" : "En curso"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -171,9 +192,10 @@ const styles = StyleSheet.create({
     color: COLORS.gray500,
     marginTop: 2,
   },
-  backButton: {
-    fontSize: FONTS.xxl,
-    color: COLORS.gray700,
+  bottomButtonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xs,
   },
   mapContainer: {
     flex: 1,
@@ -198,6 +220,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     alignItems: "center",
     justifyContent: "center",
+    gap: SPACING.xs,
   },
   bottomButtonMiddle: {
     flex: 1.2,

@@ -8,9 +8,11 @@ import React, {
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
-import apiService from "../services/api";
+import trayectoService from "../services/travels/trayectoService";
+import reservaService from "../services/travels/reservaService";
 import { GPS_CONFIG, VIAJE_ESTADO } from "../constants";
 import { useUser } from "./UserContext";
+import { BACKGROUND_LOCATION_TASK } from "../services/locationBackgroundTask";
 
 const ViajeContext = createContext();
 
@@ -22,7 +24,6 @@ export const ViajeProvider = ({ children }) => {
   const [trackingActivo, setTrackingActivo] = useState(false);
   const [distanciaTotal, setDistanciaTotal] = useState(0);
   const locationSubscription = useRef(null);
-  const ubicacionesPendientes = useRef([]);
 
   // Cargar viaje activo desde AsyncStorage
   useEffect(() => {
@@ -46,8 +47,11 @@ export const ViajeProvider = ({ children }) => {
         setPasajeros(parsed.pasajeros || []);
         setUbicaciones(parsed.ubicaciones || []);
 
-        // Si el viaje estaba activo, reanudar tracking
-        if (parsed.viaje?.estado === VIAJE_ESTADO.ACTIVO) {
+        // Si el viaje estaba en curso, reanudar tracking
+        if (
+          parsed.viaje?.status === "en curso" ||
+          parsed.viaje?.estado === VIAJE_ESTADO.ACTIVO
+        ) {
           iniciarTracking();
         }
       }
@@ -76,13 +80,32 @@ export const ViajeProvider = ({ children }) => {
   // Crear viaje rápido
   const crearViajeRapido = async (datos) => {
     try {
-      const response = await apiService.crearViaje(datos);
-      setViajeActivo(response.viaje);
-      setPasajeros(response.viaje.pasajeros || []);
+      const payload = {
+        origen:
+          datos.origen ||
+          datos.puntoInicialDireccion ||
+          datos.puntoInicialNombre ||
+          "",
+        destino:
+          datos.destino ||
+          datos.puntoFinalDireccion ||
+          datos.puntoFinalNombre ||
+          "",
+        fecha: datos.fecha,
+        hora: datos.hora,
+        plazas: datos.plazas,
+        conductor: datos.conductorId,
+        disponible: datos.plazas,
+        precio: datos.precio ?? 0,
+      };
+      const response = await trayectoService.crearTrayecto(payload);
+      const trayecto = response.trayecto || response.viaje || response;
+      setViajeActivo(trayecto);
+      setPasajeros([]);
       setUbicaciones([]);
       setDistanciaTotal(0);
-      await saveViajeActivo(response.viaje, [], []);
-      return response;
+      await saveViajeActivo(trayecto, [], []);
+      return { ...response, viaje: trayecto };
     } catch (error) {
       console.error("Error al crear viaje:", error);
       throw error;
@@ -90,13 +113,15 @@ export const ViajeProvider = ({ children }) => {
   };
 
   // Iniciar viaje
-  const iniciarViaje = async () => {
-    if (!viajeActivo) return;
+  const iniciarViaje = async (viajeParam) => {
+    const viaje = viajeParam || viajeActivo;
+    if (!viaje) return;
 
     try {
-      const response = await apiService.iniciarViaje(viajeActivo.id);
-      setViajeActivo(response.viaje);
-      await saveViajeActivo(response.viaje, pasajeros, ubicaciones);
+      const response = await trayectoService.iniciarTrayecto(viaje.id);
+      const viajeActualizado = { ...viaje, status: "en curso" };
+      setViajeActivo(viajeActualizado);
+      await saveViajeActivo(viajeActualizado, pasajeros, ubicaciones);
 
       // Iniciar tracking GPS
       await iniciarTracking();
@@ -109,28 +134,14 @@ export const ViajeProvider = ({ children }) => {
   };
 
   // Completar viaje
-  const completarViaje = async () => {
-    if (!viajeActivo) return;
+  const completarViaje = async (viajeParam) => {
+    const viaje = viajeParam || viajeActivo;
+    if (!viaje) return;
 
     try {
       await stopTracking();
 
-      // Enviar ubicaciones pendientes
-      if (ubicacionesPendientes.current.length > 0) {
-        await apiService.registrarUbicacionesBatch(
-          ubicacionesPendientes.current,
-        );
-        ubicacionesPendientes.current = [];
-      }
-
-      // Calcular distancia final
-      const distancia = await apiService.calcularDistancia(viajeActivo.id);
-      setDistanciaTotal(distancia.distanciaKm);
-
-      const response = await apiService.completarViaje(
-        viajeActivo.id,
-        distancia.distanciaKm,
-      );
+      const response = await trayectoService.finalizarTrayecto(viaje.id);
 
       // Limpiar
       await AsyncStorage.removeItem("@youconnext_viaje_activo");
@@ -153,7 +164,7 @@ export const ViajeProvider = ({ children }) => {
     try {
       await stopTracking();
 
-      const response = await apiService.cancelarViaje(viajeActivo.id);
+      const response = await trayectoService.eliminarTrayecto(viajeActivo.id);
 
       // Limpiar
       await AsyncStorage.removeItem("@youconnext_viaje_activo");
@@ -170,9 +181,9 @@ export const ViajeProvider = ({ children }) => {
   };
 
   // Unirse a un viaje via QR
-  const unirseViajeQR = async (codigoQR, usuarioDNI) => {
+  const unirseViajeQR = async (codigoQR, usuarioId) => {
     try {
-      const response = await apiService.unirseViaje(codigoQR, usuarioDNI);
+      const response = await reservaService.crearReserva(usuarioId, codigoQR);
       return response;
     } catch (error) {
       console.error("Error al unirse al viaje:", error);
@@ -180,13 +191,21 @@ export const ViajeProvider = ({ children }) => {
     }
   };
 
-  // Iniciar tracking GPS
+  // Iniciar tracking GPS (background + foreground)
   const iniciarTracking = async () => {
     try {
-      // Solicitar permisos de ubicación
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
+      // Solicitar permisos de foreground
+      const { status: fgStatus } =
+        await Location.requestForegroundPermissionsAsync();
+      if (fgStatus !== "granted") {
         throw new Error("Permiso de ubicación denegado");
+      }
+
+      // Solicitar permisos de background
+      const { status: bgStatus } =
+        await Location.requestBackgroundPermissionsAsync();
+      if (bgStatus !== "granted") {
+        console.warn("Permiso de ubicación en background denegado");
       }
 
       let servicesEnabled = await Location.hasServicesEnabledAsync();
@@ -205,7 +224,20 @@ export const ViajeProvider = ({ children }) => {
 
       setTrackingActivo(true);
 
-      // Suscribirse a actualizaciones de ubicación
+      // Iniciar background location updates (cada 20s)
+      await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
+        accuracy: Location.Accuracy.High,
+        timeInterval: 20000,
+        distanceInterval: GPS_CONFIG.MIN_DISTANCE,
+        deferredUpdatesInterval: 20000,
+        showsBackgroundLocationIndicator: true,
+        foregroundService: {
+          notificationTitle: "YouConnext",
+          notificationBody: "Trackeando tu viaje en curso...",
+        },
+      });
+
+      // También suscribirse a foreground para UI en tiempo real
       locationSubscription.current = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
@@ -229,39 +261,56 @@ export const ViajeProvider = ({ children }) => {
       locationSubscription.current.remove();
       locationSubscription.current = null;
     }
+    try {
+      const isRunning = await Location.hasStartedLocationUpdatesAsync(
+        BACKGROUND_LOCATION_TASK,
+      );
+      if (isRunning) {
+        await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+      }
+    } catch (e) {
+      console.warn("Error al detener background tracking:", e.message);
+    }
     setTrackingActivo(false);
   };
 
-  // Registrar ubicación
+  // Registrar ubicación (foreground — para UI en tiempo real)
   const registrarUbicacion = async (location) => {
     if (!viajeActivo || !user) return;
 
+    const { latitude, longitude } = location.coords;
+
+    // Guardar localmente para UI
     const ubicacion = {
       viajeId: viajeActivo.id,
-      usuarioDNI: user.dni,
-      latitud: location.coords.latitude,
-      longitud: location.coords.longitude,
-      precision: location.coords.accuracy,
-      velocidad: location.coords.speed,
-      altitud: location.coords.altitude,
+      usuarioId: user.id,
+      latitud: latitude,
+      longitud: longitude,
+      timestamp: Date.now(),
     };
-
-    // Guardar localmente
     setUbicaciones((prev) => [...prev, ubicacion]);
-
-    // Agregar a pendientes para enviar al backend
-    ubicacionesPendientes.current.push(ubicacion);
 
     // Enviar al backend (no bloqueante)
     try {
-      await apiService.registrarUbicacion(ubicacion);
-      // Remover de pendientes si se envió correctamente
-      ubicacionesPendientes.current = ubicacionesPendientes.current.filter(
-        (u) =>
-          !(
-            u.latitud === ubicacion.latitud && u.longitud === ubicacion.longitud
-          ),
-      );
+      let address = "";
+      try {
+        const [geo] = await Location.reverseGeocodeAsync({
+          latitude,
+          longitude,
+        });
+        if (geo) {
+          address = [geo.street, geo.streetNumber, geo.city, geo.region]
+            .filter(Boolean)
+            .join(", ");
+        }
+      } catch {
+        address = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+      }
+      await trayectoService.guardarRecorrido(viajeActivo.id, {
+        lat: latitude,
+        lng: longitude,
+        address,
+      });
     } catch (error) {
       console.log("Ubicación guardada localmente, se enviará después");
     }

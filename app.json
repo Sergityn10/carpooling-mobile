@@ -21,6 +21,18 @@
       "eas": {
         "projectId": "55af1ecc-6702-43e8-a1bd-b1f93698054c"
       }
-    }
+    },
+    "plugins": [
+      "@react-native-google-signin/google-signin",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow YouConnext to use your location to track trips.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isIosBackgroundLocationEnabled": true
+        }
+      ]
+    ]
   }
 }

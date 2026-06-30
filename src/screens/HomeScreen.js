@@ -1,227 +1,90 @@
 // YouConnext - HomeScreen
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   StatusBar,
-  Modal,
+  ActivityIndicator,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import * as Location from "expo-location";
+import { useFocusEffect } from "@react-navigation/native";
+import {
+  ScanLine,
+  Search,
+  BarChart3,
+  Settings,
+  History,
+  Car,
+  MapPin,
+  Clock,
+  ChevronRight,
+  CalendarDays,
+} from "lucide-react-native";
 import { useUser } from "../context/UserContext";
-import { useViaje } from "../context/ViajeContext";
 import { COLORS, SPACING, RADIUS, FONTS, SHADOWS } from "../constants";
-import { Button, ViajeCard, QRCodeModal } from "../components";
-import PlaceAutocompleteInput from "../components/PlaceAutocompleteInput";
-import TripMapPreview from "../components/TripMapPreview";
-import apiService from "../services/api";
+import { SearchBottomSheet, ViajeCard } from "../components";
+import { trayectoService } from "../services/travels/trayectoService";
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useUser();
-  const {
-    viajeActivo,
-    crearViajeRapido,
-    iniciarViaje,
-    completarViaje,
-    cancelarViaje,
-    getUbicacionActual,
-    trackingActivo,
-    distanciaTotal,
-  } = useViaje();
+  const [searchSheetVisible, setSearchSheetVisible] = useState(false);
+  const [proximosViajes, setProximosViajes] = useState([]);
+  const [loadingProximos, setLoadingProximos] = useState(false);
 
-  const [ubicacionActual, setUbicacionActual] = useState(null);
-  const [loadingLocation, setLoadingLocation] = useState(false);
-  const [showQRModal, setShowQRModal] = useState(false);
-  const [viajeCreado, setViajeCreado] = useState(null);
-  const [viajesRecientes, setViajesRecientes] = useState([]);
-  const [crearViajeModalVisible, setCrearViajeModalVisible] = useState(false);
-  const [origenTexto, setOrigenTexto] = useState("");
-  const [origenPlace, setOrigenPlace] = useState(null);
-  const [destinoTexto, setDestinoTexto] = useState("");
-  const [destinoPlace, setDestinoPlace] = useState(null);
-
-  useEffect(() => {
-    obtenerUbicacionActual();
-    cargarViajesRecientes();
-  }, []);
-
-  const obtenerUbicacionActual = async () => {
-    try {
-      setLoadingLocation(true);
-      const location = await getUbicacionActual();
-      setUbicacionActual(location.coords);
-
-      if (!origenPlace) {
-        const coords = location.coords;
-        let nombre = "Mi ubicación";
-        let direccion;
-
-        try {
-          const reversed = await Location.reverseGeocodeAsync({
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-          });
-          const first = reversed?.[0];
-          if (first) {
-            const parts = [
-              first.street,
-              first.streetNumber,
-              first.city,
-              first.region,
-            ].filter(Boolean);
-            direccion = parts.join(" ");
-            if (first.name) nombre = first.name;
-          }
-        } catch {
-          // ignore
-        }
-
-        setOrigenPlace({
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          name: nombre,
-          address: direccion,
-        });
-        setOrigenTexto(direccion || nombre);
-      }
-    } catch (error) {
-      console.log("Error al obtener ubicación:", error);
-    } finally {
-      setLoadingLocation(false);
-    }
-  };
-
-  const cargarViajesRecientes = async () => {
-    try {
-      const viajes = await apiService.listarViajesActivos();
-      setViajesRecientes(viajes.slice(0, 5));
-    } catch (error) {
-      console.log("Error al cargar viajes:", error);
-    }
-  };
-
-  const crearViajeConOrigenDestino = async () => {
-    if (
-      !origenPlace?.latitude ||
-      !origenPlace?.longitude ||
-      !destinoPlace?.latitude ||
-      !destinoPlace?.longitude
-    ) {
-      Alert.alert(
-        "Faltan datos",
-        "Selecciona un origen y un destino de la lista para obtener sus coordenadas.",
-      );
-      return;
-    }
-
-    const response = await crearViajeRapido({
-      conductorDNI: user.dni,
-      matricula: "1234ABC",
-      modeloVehiculo: "Seat León",
-      colorVehiculo: "Blanco",
-      puntoInicialLat: origenPlace.latitude,
-      puntoInicialLng: origenPlace.longitude,
-      puntoInicialNombre: origenPlace.name || "Origen",
-      puntoInicialDireccion: origenPlace.address,
-      puntoFinalLat: destinoPlace.latitude,
-      puntoFinalLng: destinoPlace.longitude,
-      puntoFinalNombre: destinoPlace.name || destinoTexto || "Destino",
-      puntoFinalDireccion: destinoPlace.address,
-    });
-
-    setViajeCreado(response.viaje);
-    setShowQRModal(true);
-  };
-
-  const handleCrearViajeRapido = async () => {
-    if (!ubicacionActual) {
-      Alert.alert(
-        "Ubicación requerida",
-        "Necesitamos tu ubicación para crear un viaje.",
-      );
-      return;
-    }
-
-    if (!user) {
-      Alert.alert("Inicia sesión", "Debes iniciar sesión para crear un viaje.");
-      return;
-    }
-
-    try {
-      setDestinoTexto("");
-      setDestinoPlace(null);
-      setCrearViajeModalVisible(true);
-    } catch (error) {
-      Alert.alert(
-        "Error",
-        error?.message || "No se pudo crear el viaje. Intenta de nuevo.",
-      );
-    }
-  };
-
-  const handleIniciarViaje = async () => {
-    try {
-      const response = await iniciarViaje();
-      navigation.navigate("ViajeEnCurso", {
-        viaje: response?.viaje || viajeActivo,
-      });
-    } catch (error) {
-      Alert.alert("Error", "No se pudo iniciar el viaje.");
-    }
-  };
-
-  const handleCompletarViaje = async () => {
-    Alert.alert(
-      "Completar viaje",
-      "¿Estás seguro de que quieres completar el viaje?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Completar",
-          onPress: async () => {
-            try {
-              await completarViaje();
-              Alert.alert(
-                "¡Viaje completado!",
-                `Distancia recorrida: ${distanciaTotal.toFixed(2)} km`,
-              );
-            } catch (error) {
-              Alert.alert("Error", "No se pudo completar el viaje.");
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  const handleCancelarViaje = async () => {
-    Alert.alert(
-      "Cancelar viaje",
-      "¿Estás seguro de que quieres cancelar el viaje?",
-      [
-        { text: "No", style: "cancel" },
-        {
-          text: "Sí, cancelar",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await cancelarViaje();
-              Alert.alert("Viaje cancelado");
-            } catch (error) {
-              Alert.alert("Error", "No se pudo cancelar el viaje.");
-            }
-          },
-        },
-      ],
-    );
+  const handleSearch = (params) => {
+    navigation.navigate("SearchTrayectos", { searchParams: params });
   };
 
   const handleUnirseViaje = () => {
     navigation.navigate("EscanearQR");
+  };
+
+  const fetchProximosViajes = useCallback(async () => {
+    setLoadingProximos(true);
+    try {
+      const res = await trayectoService.obtenerProximosTrayectos();
+      const data = Array.isArray(res) ? res : [];
+      setProximosViajes(data);
+    } catch (err) {
+      console.warn("Error al cargar próximos viajes:", err.message);
+      setProximosViajes([]);
+    } finally {
+      setLoadingProximos(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchProximosViajes();
+    }, [fetchProximosViajes]),
+  );
+
+  const formatHora = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    return date.toLocaleTimeString("es-ES", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const formatFecha = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    const hoy = new Date();
+    const manana = new Date();
+    manana.setDate(hoy.getDate() + 1);
+
+    if (date.toDateString() === hoy.toDateString()) return "Hoy";
+    if (date.toDateString() === manana.toDateString()) return "Mañana";
+    return date.toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "short",
+    });
   };
 
   return (
@@ -230,270 +93,217 @@ const HomeScreen = ({ navigation }) => {
 
       {/* Header */}
       <View style={styles.header}>
-        <View>
+        <View style={styles.headerLeft}>
           <Text style={styles.saludo}>
-            {user ? `¡Hola, ${user.nombre}! 👋` : "¡Hola!"}
+            {user ? `Hola, ${user.name}` : "Hola"}
           </Text>
-          <Text style={styles.subtitulo}>¿A dónde vamos hoy?</Text>
+          <Text style={styles.subtitulo}>A donde vamos hoy?</Text>
         </View>
-        <TouchableOpacity
-          style={styles.perfilButton}
-          onPress={() => navigation.navigate("Perfil")}
-        >
-          <Text style={styles.perfilInicial}>
-            {user?.nombre?.charAt(0) || "?"}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity style={styles.qrButton} onPress={handleUnirseViaje}>
+            <ScanLine size={22} color={COLORS.primary} strokeWidth={2.5} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.perfilButton}
+            onPress={() => navigation.navigate("Perfil")}
+          >
+            <Text style={styles.perfilInicial}>
+              {user?.nombre?.charAt(0) || "?"}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Estado de ubicación */}
-        <View style={styles.locationStatus}>
-          <View style={styles.locationIcon}>
-            <Text>📍</Text>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.contentContainer}
+      >
+        {/* Input de busqueda accionable */}
+        <TouchableOpacity
+          style={styles.searchBar}
+          onPress={() => setSearchSheetVisible(true)}
+          activeOpacity={0.7}
+        >
+          <Search size={20} color={COLORS.gray400} strokeWidth={2.5} />
+          <Text style={styles.searchPlaceholder}>Establece tu destino</Text>
+        </TouchableOpacity>
+
+        {/* Crear viaje */}
+        <View style={styles.crearViajeSection}>
+          <View style={styles.crearViajeCard}>
+            <View style={styles.crearViajeIconRow}>
+              <Car size={32} color={COLORS.white} strokeWidth={2} />
+            </View>
+            <Text style={styles.crearViajeTitle}>Tienes un viaje ahora?</Text>
+            <Text style={styles.crearViajeSubtitle}>
+              Crea un viaje rapido y comparte tu ubicacion con los pasajeros
+            </Text>
+            <TouchableOpacity
+              style={styles.crearViajeButton}
+              onPress={() => navigation.navigate("CrearViaje")}
+            >
+              <Text style={styles.crearViajeButtonText}>Crear viaje</Text>
+            </TouchableOpacity>
           </View>
-          <View style={styles.locationInfo}>
-            <Text style={styles.locationLabel}>Ubicación actual</Text>
-            {loadingLocation ? (
-              <Text style={styles.locationText}>Obteniendo...</Text>
-            ) : ubicacionActual ? (
-              <Text style={styles.locationText}>
-                {ubicacionActual.latitude.toFixed(4)},{" "}
-                {ubicacionActual.longitude.toFixed(4)}
-              </Text>
-            ) : (
-              <Text style={styles.locationTextError}>Sin ubicación</Text>
-            )}
-          </View>
-          <TouchableOpacity onPress={obtenerUbicacionActual}>
-            <Text style={styles.refreshIcon}>🔄</Text>
-          </TouchableOpacity>
         </View>
 
-        {/* Viaje activo o crear viaje */}
-        {viajeActivo ? (
-          <View style={styles.viajeActivoSection}>
-            <View style={styles.viajeActivoHeader}>
-              <Text style={styles.viajeActivoTitle}>🚗 Viaje activo</Text>
-              {trackingActivo && (
-                <View style={styles.trackingBadge}>
-                  <Text style={styles.trackingBadgeText}>
-                    📡 Tracking activo
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            <ViajeCard
-              viaje={viajeActivo}
-              onPress={() =>
-                navigation.navigate("ViajeDetalle", { viaje: viajeActivo })
-              }
-            />
-
-            <View style={styles.viajeActivoActions}>
-              {viajeActivo.estado === "pendiente" && (
-                <Button
-                  title="🚀 Iniciar viaje"
-                  onPress={handleIniciarViaje}
-                  variant="primary"
-                  size="large"
-                  style={styles.actionButton}
-                />
-              )}
-              {viajeActivo.estado === "activo" && (
-                <Button
-                  title="✅ Completar viaje"
-                  onPress={handleCompletarViaje}
-                  variant="primary"
-                  size="large"
-                  style={styles.actionButton}
-                />
-              )}
-              <Button
-                title="❌ Cancelar"
-                onPress={handleCancelarViaje}
-                variant="outline"
-                size="medium"
-                style={styles.cancelButton}
+        {/* Próximos viajes */}
+        <View style={styles.proximosSection}>
+          <View style={styles.proximosHeader}>
+            <View style={styles.proximosTitleRow}>
+              <CalendarDays
+                size={20}
+                color={COLORS.primary}
+                strokeWidth={2.5}
               />
+              <Text style={styles.proximosTitle}>Próximos viajes</Text>
             </View>
-
-            {trackingActivo && (
-              <View style={styles.statsContainer}>
-                <View style={styles.statItem}>
-                  <Text style={styles.statValue}>
-                    {distanciaTotal.toFixed(2)}
-                  </Text>
-                  <Text style={styles.statLabel}>km</Text>
+            {proximosViajes.length > 0 && (
+              <TouchableOpacity
+                onPress={() => navigation.navigate("Perfil")}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <View style={styles.verTodosRow}>
+                  <Text style={styles.verTodosText}>Ver todos</Text>
+                  <ChevronRight
+                    size={16}
+                    color={COLORS.primary}
+                    strokeWidth={2.5}
+                  />
                 </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Text style={styles.statValue}>
-                    {viajeActivo.pasajeros?.length || 0}
-                  </Text>
-                  <Text style={styles.statLabel}>pasajeros</Text>
-                </View>
-              </View>
+              </TouchableOpacity>
             )}
           </View>
-        ) : (
-          <View style={styles.crearViajeSection}>
-            <View style={styles.crearViajeCard}>
-              <Text style={styles.crearViajeTitle}>
-                ¿Tienes un viaje ahora?
-              </Text>
-              <Text style={styles.crearViajeSubtitle}>
-                Crea un viaje rápido y comparte tu ubicación con los pasajeros
-              </Text>
-              <Button
-                title="🚗 Crear viaje rápido"
-                onPress={handleCrearViajeRapido}
-                variant="primary"
-                size="large"
-                style={styles.crearViajeButton}
-              />
-            </View>
-          </View>
-        )}
 
-        {/* Sección de escanear QR */}
-        <View style={styles.escanearSection}>
-          <TouchableOpacity
-            style={styles.escanearCard}
-            onPress={handleUnirseViaje}
-          >
-            <View style={styles.escanearIcon}>
-              <Text>📱</Text>
+          {loadingProximos ? (
+            <View style={styles.proximosLoading}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={styles.proximosLoadingText}>Cargando...</Text>
             </View>
-            <View style={styles.escanearInfo}>
-              <Text style={styles.escanearTitle}>Escanear QR</Text>
-              <Text style={styles.escanearSubtitle}>
-                Únete a un viaje existente
+          ) : proximosViajes.length === 0 ? (
+            <View style={styles.proximosEmpty}>
+              <Car size={32} color={COLORS.gray300} strokeWidth={1.5} />
+              <Text style={styles.proximosEmptyText}>
+                No tienes viajes próximos en las próximas 48 horas
               </Text>
             </View>
-            <Text style={styles.escanearArrow}>→</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Viajes recientes */}
-        {viajesRecientes.length > 0 && (
-          <View style={styles.viajesRecientesSection}>
-            <Text style={styles.sectionTitle}>🔥 Viajes activos cerca</Text>
-            {viajesRecientes.map((viaje) => (
-              <ViajeCard
+          ) : (
+            proximosViajes.slice(0, 3).map((viaje) => (
+              <TouchableOpacity
                 key={viaje.id}
-                viaje={viaje}
+                style={styles.proximoCard}
                 onPress={() => navigation.navigate("ViajeDetalle", { viaje })}
-                onUnirse={handleUnirseViaje}
-              />
-            ))}
-          </View>
-        )}
+                activeOpacity={0.8}
+              >
+                <View style={styles.proximoCardLeft}>
+                  <View style={styles.proximoDateBadge}>
+                    <Text style={styles.proximoDateDay}>
+                      {formatFecha(viaje.hora)}
+                    </Text>
+                    <Text style={styles.proximoDateTime}>
+                      {formatHora(viaje.hora)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.proximoCardContent}>
+                  <View style={styles.proximoRoute}>
+                    <View style={styles.proximoPoint}>
+                      <MapPin
+                        size={14}
+                        color={COLORS.success}
+                        strokeWidth={2.5}
+                      />
+                      <Text style={styles.proximoPointText} numberOfLines={1}>
+                        {viaje.origen || "Origen"}
+                      </Text>
+                    </View>
+                    <View style={styles.proximoRouteLine} />
+                    <View style={styles.proximoPoint}>
+                      <MapPin
+                        size={14}
+                        color={COLORS.error}
+                        strokeWidth={2.5}
+                      />
+                      <Text style={styles.proximoPointText} numberOfLines={1}>
+                        {viaje.destino || "Destino"}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.proximoCardFooter}>
+                    <View style={styles.proximoConductor}>
+                      {viaje.img_perfil ? (
+                        <Image
+                          source={{ uri: viaje.img_perfil }}
+                          style={styles.proximoAvatar}
+                        />
+                      ) : (
+                        <View style={styles.proximoAvatarFallback}>
+                          <Text style={styles.proximoAvatarText}>
+                            {viaje.conductor?.charAt(0)?.toUpperCase() || "?"}
+                          </Text>
+                        </View>
+                      )}
+                      <Text
+                        style={styles.proximoConductorName}
+                        numberOfLines={1}
+                      >
+                        {viaje.conductor || "Conductor"}
+                      </Text>
+                    </View>
+                    {viaje.precio != null && (
+                      <Text style={styles.proximoPrice}>{viaje.precio} €</Text>
+                    )}
+                  </View>
+                </View>
+                <ChevronRight
+                  size={20}
+                  color={COLORS.gray300}
+                  strokeWidth={2.5}
+                />
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
 
-        {/* Acceso rápido */}
+        {/* Acceso rapido */}
         <View style={styles.accesosRapidos}>
           <TouchableOpacity
             style={styles.accesoItem}
             onPress={() => navigation.navigate("Historial")}
           >
-            <Text style={styles.accesoIcon}>📋</Text>
+            <View style={styles.accesoIconBg}>
+              <History size={22} color={COLORS.primary} strokeWidth={2} />
+            </View>
             <Text style={styles.accesoLabel}>Historial</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.accesoItem}
             onPress={() => navigation.navigate("Estadisticas")}
           >
-            <Text style={styles.accesoIcon}>📊</Text>
-            <Text style={styles.accesoLabel}>Estadísticas</Text>
+            <View style={styles.accesoIconBg}>
+              <BarChart3 size={22} color={COLORS.secondary} strokeWidth={2} />
+            </View>
+            <Text style={styles.accesoLabel}>Estadisticas</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.accesoItem}
             onPress={() => navigation.navigate("Ajustes")}
           >
-            <Text style={styles.accesoIcon}>⚙️</Text>
+            <View style={styles.accesoIconBg}>
+              <Settings size={22} color={COLORS.gray600} strokeWidth={2} />
+            </View>
             <Text style={styles.accesoLabel}>Ajustes</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
 
-      {/* QR Modal */}
-      <QRCodeModal
-        visible={showQRModal}
-        onClose={() => setShowQRModal(false)}
-        viaje={viajeCreado}
-        codigoQR={viajeCreado?.codigoQR}
+      {/* Search Bottom Sheet */}
+      <SearchBottomSheet
+        visible={searchSheetVisible}
+        onClose={() => setSearchSheetVisible(false)}
+        onSearch={handleSearch}
       />
-
-      <Modal
-        visible={crearViajeModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setCrearViajeModalVisible(false)}
-      >
-        <View style={styles.destinoOverlay}>
-          <View style={styles.destinoContainer}>
-            <Text style={styles.destinoTitle}>Crear viaje</Text>
-            <Text style={styles.destinoSubtitle}>
-              Selecciona origen y destino con autocompletado
-            </Text>
-
-            <PlaceAutocompleteInput
-              label="Origen"
-              placeholder="Tu ubicación"
-              value={origenTexto}
-              onChangeText={setOrigenTexto}
-              biasLocation={ubicacionActual}
-              onSelectPlace={(p) => {
-                setOrigenPlace(p);
-                setOrigenTexto(p.address || p.name || "");
-              }}
-              components="country:es"
-            />
-
-            <PlaceAutocompleteInput
-              label="Destino"
-              placeholder="¿A dónde vas?"
-              value={destinoTexto}
-              onChangeText={setDestinoTexto}
-              biasLocation={ubicacionActual}
-              onSelectPlace={(p) => {
-                setDestinoPlace(p);
-                setDestinoTexto(p.address || p.name || "");
-              }}
-              components="country:es"
-            />
-
-            <TripMapPreview origin={origenPlace} destination={destinoPlace} />
-
-            <View style={styles.destinoActions}>
-              <TouchableOpacity
-                style={styles.destinoCancelButton}
-                onPress={() => setCrearViajeModalVisible(false)}
-              >
-                <Text style={styles.destinoCancelText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.destinoOkButton}
-                onPress={async () => {
-                  try {
-                    await crearViajeConOrigenDestino();
-                    setCrearViajeModalVisible(false);
-                  } catch (error) {
-                    Alert.alert(
-                      "Error",
-                      error?.message ||
-                        "No se pudo crear el viaje. Intenta de nuevo.",
-                    );
-                  }
-                }}
-              >
-                <Text style={styles.destinoOkText}>Crear</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 };
@@ -512,20 +322,36 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     ...SHADOWS.small,
   },
+  headerLeft: {
+    flex: 1,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+  },
   saludo: {
     fontSize: FONTS.xl,
     fontWeight: "bold",
-    color: COLORS.gray700,
+    color: COLORS.gray800,
   },
   subtitulo: {
     fontSize: FONTS.md,
     color: COLORS.gray500,
     marginTop: 2,
   },
+  qrButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.primarySoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   perfilButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
@@ -537,106 +363,25 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  contentContainer: {
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.md,
   },
-  locationStatus: {
+  searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.gray100,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.lg,
-  },
-  locationIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: SPACING.md,
-  },
-  locationInfo: {
-    flex: 1,
-  },
-  locationLabel: {
-    fontSize: FONTS.xs,
-    color: COLORS.gray500,
-  },
-  locationText: {
-    fontSize: FONTS.sm,
-    color: COLORS.gray700,
-    fontWeight: "500",
-  },
-  locationTextError: {
-    fontSize: FONTS.sm,
-    color: COLORS.error,
-    fontWeight: "500",
-  },
-  refreshIcon: {
-    fontSize: FONTS.xl,
-  },
-  viajeActivoSection: {
-    marginBottom: SPACING.xl,
-  },
-  viajeActivoHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: SPACING.md,
-  },
-  viajeActivoTitle: {
-    fontSize: FONTS.lg,
-    fontWeight: "bold",
-    color: COLORS.gray700,
-  },
-  trackingBadge: {
-    backgroundColor: COLORS.success,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: RADIUS.full,
-  },
-  trackingBadgeText: {
-    fontSize: FONTS.xs,
-    color: COLORS.white,
-    fontWeight: "600",
-  },
-  viajeActivoActions: {
-    marginTop: SPACING.md,
-  },
-  actionButton: {
-    marginBottom: SPACING.sm,
-  },
-  cancelButton: {
-    borderColor: COLORS.error,
-  },
-  statsContainer: {
-    flexDirection: "row",
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    marginTop: SPACING.md,
-    justifyContent: "center",
-  },
-  statItem: {
-    alignItems: "center",
-    paddingHorizontal: SPACING.lg,
-  },
-  statValue: {
-    fontSize: FONTS.xxl,
-    fontWeight: "bold",
-    color: COLORS.white,
-  },
-  statLabel: {
-    fontSize: FONTS.sm,
-    color: COLORS.white,
-    opacity: 0.8,
-  },
-  statDivider: {
-    width: 1,
     backgroundColor: COLORS.white,
-    opacity: 0.3,
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    marginBottom: SPACING.lg,
+    gap: SPACING.sm,
+    ...SHADOWS.small,
+  },
+  searchPlaceholder: {
+    fontSize: FONTS.md,
+    color: COLORS.gray400,
   },
   crearViajeSection: {
     marginBottom: SPACING.xl,
@@ -644,8 +389,17 @@ const styles = StyleSheet.create({
   crearViajeCard: {
     backgroundColor: COLORS.primary,
     borderRadius: RADIUS.xl,
-    padding: SPACING.lg,
+    padding: SPACING.xl,
     ...SHADOWS.large,
+  },
+  crearViajeIconRow: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: SPACING.md,
   },
   crearViajeTitle: {
     fontSize: FONTS.xl,
@@ -661,51 +415,167 @@ const styles = StyleSheet.create({
   },
   crearViajeButton: {
     backgroundColor: COLORS.white,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.md,
+    alignItems: "center",
   },
-  escanearSection: {
+  crearViajeButtonText: {
+    color: COLORS.primary,
+    fontWeight: "bold",
+    fontSize: FONTS.md,
+  },
+  proximosSection: {
     marginBottom: SPACING.xl,
   },
-  escanearCard: {
+  proximosHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: SPACING.md,
+  },
+  proximosTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xs,
+  },
+  proximosTitle: {
+    fontSize: FONTS.lg,
+    fontWeight: "bold",
+    color: COLORS.gray800,
+  },
+  verTodosRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  verTodosText: {
+    fontSize: FONTS.sm,
+    color: COLORS.primary,
+    fontWeight: "600",
+  },
+  proximosLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.sm,
+    paddingVertical: SPACING.xl,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    ...SHADOWS.small,
+  },
+  proximosLoadingText: {
+    fontSize: FONTS.sm,
+    color: COLORS.gray500,
+  },
+  proximosEmpty: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.sm,
+    paddingVertical: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    ...SHADOWS.small,
+  },
+  proximosEmptyText: {
+    fontSize: FONTS.sm,
+    color: COLORS.gray400,
+    textAlign: "center",
+  },
+  proximoCard: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.lg,
     padding: SPACING.md,
-    ...SHADOWS.medium,
+    marginBottom: SPACING.sm,
+    ...SHADOWS.small,
   },
-  escanearIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.secondary,
-    alignItems: "center",
-    justifyContent: "center",
+  proximoCardLeft: {
     marginRight: SPACING.md,
   },
-  escanearInfo: {
+  proximoDateBadge: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.primarySoft,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    minWidth: 60,
+  },
+  proximoDateDay: {
+    fontSize: FONTS.xs,
+    fontWeight: "bold",
+    color: COLORS.primary,
+    textTransform: "capitalize",
+  },
+  proximoDateTime: {
+    fontSize: FONTS.sm,
+    fontWeight: "600",
+    color: COLORS.primary,
+    marginTop: 2,
+  },
+  proximoCardContent: {
     flex: 1,
   },
-  escanearTitle: {
+  proximoRoute: {
+    marginBottom: SPACING.sm,
+  },
+  proximoPoint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xs,
+  },
+  proximoPointText: {
+    fontSize: FONTS.sm,
+    color: COLORS.gray700,
+    flex: 1,
+  },
+  proximoRouteLine: {
+    width: 2,
+    height: 12,
+    backgroundColor: COLORS.gray300,
+    marginLeft: 6,
+    marginVertical: 2,
+  },
+  proximoCardFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  proximoConductor: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xs,
+    flex: 1,
+  },
+  proximoAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  proximoAvatarFallback: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  proximoAvatarText: {
+    fontSize: FONTS.xs,
+    fontWeight: "bold",
+    color: COLORS.white,
+  },
+  proximoConductorName: {
+    fontSize: FONTS.xs,
+    color: COLORS.gray500,
+    flex: 1,
+  },
+  proximoPrice: {
     fontSize: FONTS.md,
     fontWeight: "bold",
     color: COLORS.gray700,
-  },
-  escanearSubtitle: {
-    fontSize: FONTS.sm,
-    color: COLORS.gray500,
-  },
-  escanearArrow: {
-    fontSize: FONTS.xl,
-    color: COLORS.primary,
-  },
-  viajesRecientesSection: {
-    marginBottom: SPACING.xl,
-  },
-  sectionTitle: {
-    fontSize: FONTS.lg,
-    fontWeight: "bold",
-    color: COLORS.gray700,
-    marginBottom: SPACING.md,
   },
   accesosRapidos: {
     flexDirection: "row",
@@ -714,76 +584,21 @@ const styles = StyleSheet.create({
   },
   accesoItem: {
     alignItems: "center",
-    padding: SPACING.md,
   },
-  accesoIcon: {
-    fontSize: 28,
+  accesoIconBg: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: COLORS.white,
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: SPACING.xs,
+    ...SHADOWS.small,
   },
   accesoLabel: {
-    fontSize: FONTS.sm,
+    fontSize: FONTS.xs,
     color: COLORS.gray600,
-  },
-  destinoOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: SPACING.lg,
-  },
-  destinoContainer: {
-    width: "100%",
-    maxWidth: 360,
-    backgroundColor: COLORS.white,
-    borderRadius: RADIUS.xl,
-    padding: SPACING.lg,
-    ...SHADOWS.large,
-  },
-  destinoTitle: {
-    fontSize: FONTS.lg,
-    fontWeight: "bold",
-    color: COLORS.gray700,
-    marginBottom: SPACING.xs,
-  },
-  destinoSubtitle: {
-    fontSize: FONTS.sm,
-    color: COLORS.gray500,
-    marginBottom: SPACING.md,
-  },
-  destinoInput: {
-    borderWidth: 1,
-    borderColor: COLORS.gray200,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    fontSize: FONTS.md,
-    color: COLORS.gray700,
-    marginBottom: SPACING.md,
-  },
-  destinoActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-  },
-  destinoCancelButton: {
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    marginRight: SPACING.sm,
-  },
-  destinoCancelText: {
-    color: COLORS.gray600,
-    fontWeight: "600",
-    fontSize: FONTS.sm,
-  },
-  destinoOkButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: RADIUS.md,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
-  },
-  destinoOkText: {
-    color: COLORS.white,
-    fontWeight: "bold",
-    fontSize: FONTS.sm,
+    fontWeight: "500",
   },
 });
 

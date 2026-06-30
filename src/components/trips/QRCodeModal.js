@@ -1,8 +1,16 @@
 // YouConnext - QRCodeModal Component
-import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Image } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
-import { COLORS, SPACING, RADIUS, FONTS, SHADOWS } from '../constants';
+import React from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Modal,
+  TouchableOpacity,
+  Image,
+} from "react-native";
+import { X, CheckCircle2 } from "lucide-react-native";
+import QRCode from "react-native-qrcode-svg";
+import { COLORS, SPACING, RADIUS, FONTS, SHADOWS } from "../../constants";
 
 const QRCodeModal = ({ visible, onClose, viaje, codigoQR }) => {
   if (!viaje) return null;
@@ -18,9 +26,12 @@ const QRCodeModal = ({ visible, onClose, viaje, codigoQR }) => {
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.titulo}>¡Viaje creado! 🎉</Text>
+            <View style={styles.headerTitleRow}>
+              <CheckCircle2 size={22} color={COLORS.success} strokeWidth={2} />
+              <Text style={styles.titulo}>Viaje creado</Text>
+            </View>
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <Text style={styles.closeButtonText}>✕</Text>
+              <X size={20} color={COLORS.gray500} strokeWidth={2.5} />
             </TouchableOpacity>
           </View>
 
@@ -43,7 +54,9 @@ const QRCodeModal = ({ visible, onClose, viaje, codigoQR }) => {
           <View style={styles.codigoSection}>
             <Text style={styles.codigoLabel}>O comparte este código:</Text>
             <View style={styles.codigoBox}>
-              <Text style={styles.codigoTexto}>{viaje.codigoQR}</Text>
+              <Text style={styles.codigoTexto}>
+                {viaje.codigoQR || `TRIP-${viaje.id}`}
+              </Text>
             </View>
           </View>
 
@@ -56,7 +69,7 @@ const QRCodeModal = ({ visible, onClose, viaje, codigoQR }) => {
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Conductor</Text>
               <Text style={styles.infoValue}>
-                {viaje.conductor?.nombre || 'Desconocido'}
+                {viaje.conductor?.nombre || "Desconocido"}
               </Text>
             </View>
             <View style={styles.infoRow}>
@@ -80,44 +93,49 @@ const QRCodeModal = ({ visible, onClose, viaje, codigoQR }) => {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: SPACING.lg,
   },
   container: {
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.xl,
     padding: SPACING.lg,
-    width: '100%',
+    width: "100%",
     maxWidth: 340,
     ...SHADOWS.large,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: SPACING.lg,
   },
   titulo: {
     fontSize: FONTS.xl,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: COLORS.gray700,
+  },
+  headerTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xs,
   },
   closeButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
     backgroundColor: COLORS.gray100,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   closeButtonText: {
     fontSize: FONTS.lg,
     color: COLORS.gray500,
   },
   qrContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: SPACING.lg,
   },
   qrWrapper: {
@@ -129,11 +147,11 @@ const styles = StyleSheet.create({
   instruction: {
     fontSize: FONTS.sm,
     color: COLORS.gray500,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: SPACING.md,
   },
   codigoSection: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: SPACING.lg,
   },
   codigoLabel: {
@@ -149,7 +167,7 @@ const styles = StyleSheet.create({
   },
   codigoTexto: {
     fontSize: FONTS.xxl,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: COLORS.primary,
     letterSpacing: 4,
   },
@@ -160,8 +178,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: SPACING.xs,
   },
   infoLabel: {
@@ -171,17 +189,17 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: FONTS.sm,
     color: COLORS.gray700,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   cerrarButton: {
     backgroundColor: COLORS.primary,
     borderRadius: RADIUS.md,
     paddingVertical: SPACING.md,
-    alignItems: 'center',
+    alignItems: "center",
   },
   cerrarButtonText: {
     color: COLORS.white,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     fontSize: FONTS.md,
   },
 });

@@ -12,6 +12,10 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.youconnext.es",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyBtz5pxS6ZVcVBA9jdbQn7bQPC72c81BT8"
       }
     },
     "production": {

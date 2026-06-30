@@ -70,6 +70,38 @@ export const autocompletePlaces = async ({
   return data.predictions || [];
 };
 
+export const reverseGeocode = async ({
+  latitude,
+  longitude,
+  language = "es",
+}) => {
+  assertApiKey();
+  const key = getApiKey();
+
+  const url = buildUrl("https://maps.googleapis.com/maps/api/geocode/json", {
+    latlng: `${latitude},${longitude}`,
+    key,
+    language,
+  });
+
+  const res = await fetch(url);
+  const data = await res.json();
+
+  if (!res.ok || data.status !== "OK") {
+    throw new Error(
+      data.error_message || `Google Geocoding error: ${data.status}`,
+    );
+  }
+
+  const result = data.results?.[0];
+  return {
+    name: result?.address_components?.[0]?.long_name || "Mi ubicación",
+    address: result?.formatted_address || `${latitude}, ${longitude}`,
+    latitude,
+    longitude,
+  };
+};
+
 export const getPlaceDetails = async ({
   placeId,
   language = "es",

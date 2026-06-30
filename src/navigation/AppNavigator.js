@@ -3,39 +3,47 @@ import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { Text, View, StyleSheet } from "react-native";
-import { COLORS, FONTS } from "../constants";
+import { View, StyleSheet, ActivityIndicator } from "react-native";
+import { Home, User, ScanLine, Search } from "lucide-react-native";
+import { COLORS } from "../constants";
+import { useUser } from "../context/UserContext";
 import {
   HomeScreen,
   PerfilScreen,
   EscanearQRScreen,
   ViajeDetalleScreen,
+  AuthScreen,
+  CrearViajeScreen,
+  SearchTrayectosScreen,
+  ViajeEnCursoScreen,
+  OnboardingScreen,
 } from "../screens";
-import ViajeEnCursoScreen from "../screens/ViajeEnCursoScreen";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 // Componente para los iconos del tab
-const TabIcon = ({ icon, label, focused }) => (
+const TabIcon = ({ Icon, focused, color }) => (
   <View style={styles.tabIconContainer}>
-    <Text style={[styles.tabIcon, focused && styles.tabIconFocused]}>
-      {icon}
-    </Text>
-    <Text style={[styles.tabLabel, focused && styles.tabLabelFocused]}>
-      {label}
-    </Text>
+    <Icon
+      size={24}
+      color={focused ? COLORS.primary : COLORS.gray400}
+      strokeWidth={focused ? 2.5 : 2}
+    />
   </View>
 );
 
-// Navegación principal (con tabs)
+// Navegacion principal (con tabs)
 const MainTabs = () => {
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
         tabBarStyle: styles.tabBar,
-        tabBarShowLabel: false,
+        tabBarShowLabel: true,
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.gray400,
+        tabBarLabelStyle: styles.tabLabel,
       }}
     >
       <Tab.Screen
@@ -43,17 +51,19 @@ const MainTabs = () => {
         component={HomeScreen}
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon icon="🏠" label="Inicio" focused={focused} />
+            <TabIcon Icon={Home} focused={focused} />
           ),
+          tabBarLabel: "Inicio",
         }}
       />
       <Tab.Screen
-        name="EscanearQR"
-        component={EscanearQRScreen}
+        name="SearchTab"
+        component={SearchTrayectosScreen}
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon icon="📱" label="Escanear" focused={focused} />
+            <TabIcon Icon={Search} focused={focused} />
           ),
+          tabBarLabel: "Buscar",
         }}
       />
       <Tab.Screen
@@ -61,18 +71,90 @@ const MainTabs = () => {
         component={PerfilScreen}
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon icon="👤" label="Perfil" focused={focused} />
+            <TabIcon Icon={User} focused={focused} />
           ),
+          tabBarLabel: "Perfil",
         }}
       />
     </Tab.Navigator>
   );
 };
 
-// Navegación principal de la app
+// Pantalla de carga mientras se verifica la sesion
+const LoadingScreen = () => (
+  <View style={styles.loadingContainer}>
+    <ActivityIndicator size="large" color={COLORS.primary} />
+  </View>
+);
+
+// Configuración de Deep Linking para la app YouConnext
+const linking = {
+  prefixes: [
+    "youconnext://",
+    "https://youconnext.com",
+    "http://youconnext.com",
+    "https://www.youconnext.com",
+    "http://www.youconnext.com",
+    "exp+youconnextapp://",
+  ],
+  config: {
+    screens: {
+      Main: {
+        screens: {
+          Home: "home",
+          SearchTab: "buscar",
+          Perfil: "perfil",
+        },
+      },
+      ViajeDetalle: {
+        path: "api/trayecto/:id",
+        parse: {
+          id: (id) => Number(id),
+        },
+      },
+      ViajeEnCurso: "api/trayecto/:id/en-curso",
+    },
+  },
+};
+
+// Navegacion principal de la app
 const AppNavigator = () => {
+  const { user, isAuthenticated, loading } = useUser();
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <NavigationContainer linking={linking}>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="Auth" component={AuthScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    );
+  }
+
+  const needsOnboarding =
+    user &&
+    (user.onboarding_ended === 0 ||
+      user.onboarding_ended === false ||
+      user.onboarding_ended === "0" ||
+      user.onboarding_ended === null ||
+      user.onboarding_ended === undefined);
+
+  if (needsOnboarding) {
+    return (
+      <NavigationContainer linking={linking}>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    );
+  }
+
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
@@ -87,6 +169,16 @@ const AppNavigator = () => {
         />
         <Stack.Screen name="ViajeDetalle" component={ViajeDetalleScreen} />
         <Stack.Screen name="ViajeEnCurso" component={ViajeEnCursoScreen} />
+        <Stack.Screen
+          name="CrearViaje"
+          component={CrearViajeScreen}
+          options={{ animation: "slide_from_bottom" }}
+        />
+        <Stack.Screen
+          name="SearchTrayectos"
+          component={SearchTrayectosScreen}
+          options={{ animation: "slide_from_right" }}
+        />
         <Stack.Screen name="Perfil" component={PerfilScreen} />
         <Stack.Screen name="Historial" component={HomeScreen} />
         <Stack.Screen name="Estadisticas" component={HomeScreen} />
@@ -97,32 +189,32 @@ const AppNavigator = () => {
 };
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.background,
+  },
   tabBar: {
-    height: 70,
+    height: 64,
     backgroundColor: COLORS.white,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.gray200,
-    paddingBottom: 10,
-    paddingTop: 10,
+    borderTopWidth: 0,
+    elevation: 0,
+    shadowColor: COLORS.gray900,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    paddingBottom: 8,
+    paddingTop: 8,
   },
   tabIconContainer: {
     alignItems: "center",
     justifyContent: "center",
   },
-  tabIcon: {
-    fontSize: 24,
-    marginBottom: 2,
-  },
-  tabIconFocused: {
-    transform: [{ scale: 1.1 }],
-  },
   tabLabel: {
-    fontSize: FONTS.xs,
-    color: COLORS.gray500,
-  },
-  tabLabelFocused: {
-    color: COLORS.primary,
+    fontSize: 11,
     fontWeight: "600",
+    marginTop: 2,
   },
 });
 

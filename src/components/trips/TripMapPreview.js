@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Image, StyleSheet, Text } from "react-native";
-import { COLORS, SPACING, RADIUS, FONTS, SHADOWS } from "../constants";
+import { COLORS, SPACING, RADIUS, FONTS, SHADOWS } from "../../constants";
 import {
   buildStaticMapUrl,
   getDirectionsRoute,
-} from "../services/googlePlaces";
+} from "../../services/googlePlaces";
 
 const TripMapPreview = ({ origin, destination, height = 160 }) => {
   const [imageError, setImageError] = useState(false);
